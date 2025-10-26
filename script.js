@@ -22,6 +22,8 @@ class SaudiDrawingGame {
         this.notifications = [];
         this.roomStorageKey = 'saudi_drawing_rooms';
         this.playerStorageKey = 'saudi_drawing_player';
+        this.playerId = this.generatePlayerId();
+        this.firebaseInitialized = false;
         
         // Saudi-themed word categories
         this.wordCategories = {
@@ -60,8 +62,26 @@ class SaudiDrawingGame {
         this.setupCanvas();
         this.setupEventListeners();
         this.setupDrawing();
+        this.initializeFirebase();
         this.checkForRoomCode();
         this.updateUI();
+    }
+    
+    generatePlayerId() {
+        return 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    initializeFirebase() {
+        // Wait for Firebase to be available
+        const checkFirebase = () => {
+            if (window.firebaseDatabase) {
+                this.firebaseInitialized = true;
+                this.showNotification('success', 'متصل!', 'تم الاتصال بخدمة الألعاب المتعددة');
+            } else {
+                setTimeout(checkFirebase, 100);
+            }
+        };
+        checkFirebase();
     }
     
     checkForRoomCode() {
@@ -279,10 +299,11 @@ class SaudiDrawingGame {
     
     addPlayer(name, isCurrentPlayer = false) {
         const player = {
-            id: Date.now() + Math.random(),
+            id: this.playerId,
             name: name,
             score: 0,
-            isCurrentPlayer: isCurrentPlayer
+            isCurrentPlayer: isCurrentPlayer,
+            joinedAt: Date.now()
         };
         
         this.players.push(player);
@@ -293,11 +314,107 @@ class SaudiDrawingGame {
         }
         
         this.updatePlayersList();
+    }
+    
+    addPlayerToFirebase(playerName) {
+        const player = {
+            id: this.playerId,
+            name: playerName,
+            score: 0,
+            isCurrentPlayer: false,
+            joinedAt: Date.now()
+        };
         
-        // Save room data when players are added
-        if (this.roomCode) {
-            this.saveRoomData();
-        }
+        // Add player to Firebase
+        const playersRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/players/${this.playerId}`);
+        window.firebaseSet(playersRef, player);
+        
+        // Update score
+        const scoreRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/score/${this.playerId}`);
+        window.firebaseSet(scoreRef, 0);
+    }
+    
+    createFirebaseRoom() {
+        const roomData = {
+            roomId: this.roomId,
+            roomCode: this.roomCode,
+            hostId: this.playerId,
+            players: {},
+            score: {},
+            gameState: 'waiting',
+            currentWord: '',
+            createdAt: window.firebaseServerTimestamp(),
+            lastActivity: window.firebaseServerTimestamp()
+        };
+        
+        // Add host player
+        roomData.players[this.playerId] = {
+            id: this.playerId,
+            name: 'أنت (المضيف)',
+            score: 0,
+            isCurrentPlayer: true,
+            joinedAt: Date.now()
+        };
+        
+        roomData.score[this.playerId] = 0;
+        
+        // Create room in Firebase
+        const roomRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}`);
+        window.firebaseSet(roomRef, roomData);
+    }
+    
+    listenToRoomUpdates() {
+        if (!this.firebaseInitialized || !this.roomCode) return;
+        
+        const roomRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}`);
+        
+        window.firebaseOnValue(roomRef, (snapshot) => {
+            const roomData = snapshot.val();
+            
+            if (roomData) {
+                // Update players list
+                const players = Object.values(roomData.players || {});
+                this.players = players;
+                this.score = roomData.score || {};
+                
+                // Update current player
+                const currentPlayer = players.find(p => p.isCurrentPlayer);
+                if (currentPlayer) {
+                    this.currentPlayer = currentPlayer;
+                }
+                
+                // Update game state
+                this.gameState = roomData.gameState || 'waiting';
+                this.currentWord = roomData.currentWord || '';
+                
+                this.updatePlayersList();
+                this.updateWordDisplay();
+                
+                // Update last activity
+                const activityRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/lastActivity`);
+                window.firebaseSet(activityRef, window.firebaseServerTimestamp());
+            }
+        });
+    }
+    
+    updateFirebaseRoom() {
+        if (!this.firebaseInitialized || !this.roomCode) return;
+        
+        const roomRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}`);
+        const updates = {
+            players: {},
+            score: this.score,
+            gameState: this.gameState,
+            currentWord: this.currentWord,
+            lastActivity: window.firebaseServerTimestamp()
+        };
+        
+        // Convert players array to object
+        this.players.forEach(player => {
+            updates.players[player.id] = player;
+        });
+        
+        window.firebaseSet(roomRef, updates);
     }
     
     updatePlayersList() {
@@ -326,6 +443,7 @@ class SaudiDrawingGame {
         }
         
         this.gameState = 'wordSelection';
+        this.updateFirebaseRoom();
         this.showWordSelection();
         this.hideCanvasOverlay();
     }
@@ -342,6 +460,15 @@ class SaudiDrawingGame {
         this.gameState = 'waiting';
         this.showCanvasOverlay();
         this.stopTimer();
+        
+        // Remove player from Firebase room
+        if (this.firebaseInitialized && this.roomCode) {
+            const playerRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/players/${this.playerId}`);
+            window.firebaseRemove(playerRef);
+            
+            const scoreRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/score/${this.playerId}`);
+            window.firebaseRemove(scoreRef);
+        }
         
         // Clear room data
         localStorage.removeItem(this.roomStorageKey);
@@ -406,6 +533,7 @@ class SaudiDrawingGame {
         
         this.currentWord = this.selectedWord;
         this.gameState = 'playing';
+        this.updateFirebaseRoom();
         this.startTimer();
         this.updateWordDisplay();
         this.hideModal('wordModal');
@@ -469,6 +597,11 @@ class SaudiDrawingGame {
         if (guess.toLowerCase() === this.currentWord.toLowerCase()) {
             this.addMessage('correct', `🎉 ${this.currentPlayer.name} خمن الكلمة بشكل صحيح!`);
             this.score[this.currentPlayer.id] += 10;
+            
+            // Update Firebase with new score
+            const scoreRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/score/${this.currentPlayer.id}`);
+            window.firebaseSet(scoreRef, this.score[this.currentPlayer.id]);
+            
             this.updatePlayersList();
             this.endTurn();
         } else {
@@ -494,6 +627,7 @@ class SaudiDrawingGame {
         this.currentPlayer = this.players[nextIndex];
         
         this.updateWordDisplay();
+        this.updateFirebaseRoom();
     }
     
     isCurrentPlayer() {
@@ -558,8 +692,8 @@ class SaudiDrawingGame {
         this.score = {};
         this.addPlayer('أنت (المضيف)', true);
         
-        // Save room data to localStorage
-        this.saveRoomData();
+        // Create room in Firebase
+        this.createFirebaseRoom();
         
         // Show room info
         this.showRoomInfo();
@@ -571,8 +705,9 @@ class SaudiDrawingGame {
         // Update URL with room code
         this.updateURL();
         
-        // Simulate WebSocket connection
-        this.simulateWebSocket();
+        // Start listening for room updates
+        this.listenToRoomUpdates();
+        this.setupRealTimeUpdates();
     }
     
     showJoinRoomModal() {
@@ -592,24 +727,27 @@ class SaudiDrawingGame {
     }
     
     joinRoomByCode(roomCode, playerName) {
-        // Check if room exists in localStorage
-        const savedRoom = localStorage.getItem(this.roomStorageKey);
+        if (!this.firebaseInitialized) {
+            this.showNotification('error', 'خطأ!', 'جاري الاتصال بالخادم، حاول مرة أخرى');
+            return;
+        }
         
-        if (savedRoom) {
-            const roomData = JSON.parse(savedRoom);
-            if (roomData.roomCode === roomCode) {
-                // Join existing room
-                this.roomCode = roomData.roomCode;
+        // Check if room exists in Firebase
+        const roomRef = window.firebaseRef(window.firebaseDatabase, `rooms/${roomCode}`);
+        
+        window.firebaseOnValue(roomRef, (snapshot) => {
+            const roomData = snapshot.val();
+            
+            if (roomData) {
+                // Room exists, join it
+                this.roomCode = roomCode;
                 this.roomId = roomData.roomId;
                 this.isHost = false;
                 this.players = roomData.players || [];
                 this.score = roomData.score || {};
                 
-                // Add new player
-                this.addPlayer(playerName, false);
-                
-                // Save updated room data
-                this.saveRoomData();
+                // Add new player to Firebase
+                this.addPlayerToFirebase(playerName);
                 
                 // Update URL
                 this.updateURL();
@@ -621,12 +759,14 @@ class SaudiDrawingGame {
                 // Show room info for guests too
                 this.showRoomInfo();
                 
-                return;
+                // Start listening for room updates
+                this.listenToRoomUpdates();
+                this.setupRealTimeUpdates();
+            } else {
+                // Room not found
+                this.showNotification('error', 'خطأ!', 'كود الغرفة غير صحيح أو انتهت صلاحيته');
             }
-        }
-        
-        // Room not found
-        this.showNotification('error', 'خطأ!', 'كود الغرفة غير صحيح أو انتهت صلاحيته');
+        }, { onlyOnce: true });
     }
     
     generateRoomCode() {
@@ -727,25 +867,33 @@ class SaudiDrawingGame {
         }
     }
     
-    simulateWebSocket() {
-        // Simulate real-time updates and room synchronization
-        setInterval(() => {
-            if (this.roomCode) {
-                this.syncRoomData();
-            }
+    // Real-time Firebase updates (replaces simulateWebSocket)
+    setupRealTimeUpdates() {
+        if (!this.firebaseInitialized) return;
+        
+        // Listen for player connections/disconnections
+        const presenceRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/presence/${this.playerId}`);
+        window.firebaseSet(presenceRef, {
+            online: true,
+            lastSeen: window.firebaseServerTimestamp()
+        });
+        
+        // Clean up when player leaves
+        window.addEventListener('beforeunload', () => {
+            window.firebaseRemove(presenceRef);
+        });
+        
+        // Monitor other players' presence
+        const presenceListRef = window.firebaseRef(window.firebaseDatabase, `rooms/${this.roomCode}/presence`);
+        window.firebaseOnValue(presenceListRef, (snapshot) => {
+            const presence = snapshot.val() || {};
+            const onlinePlayers = Object.keys(presence).filter(playerId => 
+                presence[playerId].online && playerId !== this.playerId
+            );
             
-            if (this.gameState === 'playing' && this.isHost) {
-                // Simulate other players joining
-                if (Math.random() < 0.1 && this.players.length < 6) {
-                    const names = ['أحمد', 'فاطمة', 'محمد', 'نورا', 'خالد', 'سارة'];
-                    const randomName = names[Math.floor(Math.random() * names.length)];
-                    if (!this.players.find(p => p.name === randomName)) {
-                        this.addPlayer(randomName, false);
-                        this.addMessage('system', `${randomName} انضم للعبة!`);
-                    }
-                }
-            }
-        }, 2000);
+            // Update player count
+            document.getElementById('playerCount').textContent = onlinePlayers.length + 1;
+        });
     }
     
     syncRoomData() {
