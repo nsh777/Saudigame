@@ -690,7 +690,7 @@ class SaudiDrawingGame {
         
         if (this.gameState === 'waiting') {
             startBtn.style.display = 'inline-block';
-            createRoomBtn.style.display = 'none';
+            createRoomBtn.style.display = 'inline-block';
             joinBtn.style.display = 'inline-block';
             leaveBtn.style.display = 'none';
         } else {
@@ -710,7 +710,7 @@ class SaudiDrawingGame {
         
         // Reset UI to initial state
         document.getElementById('startGame').style.display = 'inline-block';
-        document.getElementById('createRoom').style.display = 'none';
+        document.getElementById('createRoom').style.display = 'inline-block';
         document.getElementById('joinRoom').style.display = 'inline-block';
         document.getElementById('leaveGame').style.display = 'none';
         
@@ -748,9 +748,9 @@ class SaudiDrawingGame {
         console.log('Creating room...');
         console.log('Firebase initialized:', this.firebaseInitialized);
         
+        // If Firebase is not available, create a local room
         if (!this.firebaseInitialized) {
-            this.showNotification('error', 'خطأ!', 'جاري الاتصال بالخادم، حاول مرة أخرى');
-            console.error('Firebase not initialized');
+            this.createLocalRoom();
             return;
         }
         
@@ -788,6 +788,33 @@ class SaudiDrawingGame {
         // Start listening for room updates
         this.listenToRoomUpdates();
         this.setupRealTimeUpdates();
+    }
+    
+    createLocalRoom() {
+        console.log('Creating local room (Firebase not available)');
+        
+        this.roomCode = this.generateRoomCode();
+        this.isHost = true;
+        this.roomId = Date.now().toString();
+        
+        // Clear existing players and add host
+        this.players = [];
+        this.score = {};
+        this.addPlayer('أنت (المضيف)', true);
+        
+        // Add some AI players for local testing
+        this.addPlayer('أحمد', false);
+        this.addPlayer('فاطمة', false);
+        
+        // Show room info
+        this.showRoomInfo();
+        this.hideModal('joinRoomModal');
+        
+        this.showNotification('success', 'تم إنشاء الغرفة المحلية!', 'الغرفة تعمل محلياً (بدون Firebase)');
+        this.addMessage('system', `تم إنشاء غرفة محلية: ${this.roomCode}`);
+        
+        // Update URL with room code
+        this.updateURL();
     }
     
     showJoinRoomModal() {
