@@ -161,6 +161,10 @@ class SaudiDrawingGame {
         });
         
         // Game controls
+        document.getElementById('startGame').addEventListener('click', () => {
+            this.startSinglePlayerGame();
+        });
+        
         document.getElementById('createRoom').addEventListener('click', () => {
             this.createRoom();
         });
@@ -680,16 +684,19 @@ class SaudiDrawingGame {
     updateUI() {
         // Update button visibility based on game state
         const startBtn = document.getElementById('startGame');
-        const joinBtn = document.getElementById('joinGame');
+        const createRoomBtn = document.getElementById('createRoom');
+        const joinBtn = document.getElementById('joinRoom');
         const leaveBtn = document.getElementById('leaveGame');
         
         if (this.gameState === 'waiting') {
             startBtn.style.display = 'inline-block';
+            createRoomBtn.style.display = 'none';
             joinBtn.style.display = 'inline-block';
             leaveBtn.style.display = 'none';
         } else {
             startBtn.style.display = 'none';
-            joinBtn.style.display = 'none';
+            createRoomBtn.style.display = 'inline-block';
+            joinBtn.style.display = 'inline-block';
             leaveBtn.style.display = 'inline-block';
         }
     }
@@ -700,7 +707,40 @@ class SaudiDrawingGame {
         this.showCanvasOverlay();
         this.stopTimer();
         this.hideModal('gameOverModal');
+        
+        // Reset UI to initial state
+        document.getElementById('startGame').style.display = 'inline-block';
+        document.getElementById('createRoom').style.display = 'none';
+        document.getElementById('joinRoom').style.display = 'inline-block';
+        document.getElementById('leaveGame').style.display = 'none';
+        
+        this.addPlayer('أنت', true);
         this.addMessage('system', 'بدأت لعبة جديدة!');
+    }
+    
+    startSinglePlayerGame() {
+        console.log('Starting single player game...');
+        
+        // Add AI players for single player mode
+        this.players = [];
+        this.score = {};
+        this.addPlayer('أنت', true);
+        this.addPlayer('أحمد', false);
+        this.addPlayer('فاطمة', false);
+        this.addPlayer('محمد', false);
+        
+        // Show multiplayer options
+        document.getElementById('startGame').style.display = 'none';
+        document.getElementById('createRoom').style.display = 'inline-block';
+        document.getElementById('joinRoom').style.display = 'inline-block';
+        
+        // Start the game
+        this.gameState = 'wordSelection';
+        this.showWordSelection();
+        this.hideCanvasOverlay();
+        
+        this.showNotification('success', 'بدأت اللعبة!', 'الآن يمكنك إنشاء غرفة متعددة أو الانضمام لغيرها');
+        this.addMessage('system', 'بدأت اللعبة! يمكنك الآن إنشاء غرفة متعددة أو الانضمام لغيرها');
     }
     
     // Multiplayer Methods
