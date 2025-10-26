@@ -493,27 +493,46 @@ class SaudiDrawingGame {
     
     startRoomGame() {
         console.log('Starting room game...');
+        console.log('Current players:', this.players);
+        console.log('Players length:', this.players.length);
         
         if (this.players.length < 2) {
             this.showNotification('warning', 'تحذير!', 'يجب أن يكون هناك لاعبين على الأقل لبدء اللعبة');
+            console.log('Not enough players to start game');
             return;
         }
         
-        // Hide room info and start the actual game
-        document.getElementById('roomInfo').style.display = 'none';
-        document.getElementById('leaveGame').style.display = 'inline-block';
-        
-        // Start the game
-        this.gameState = 'wordSelection';
-        this.showWordSelection();
-        this.hideCanvasOverlay();
-        
-        this.showNotification('success', 'بدأت اللعبة!', 'الآن يمكن للاعبين البدء في الرسم والتخمين');
-        this.addMessage('system', 'بدأت اللعبة! حظاً سعيداً للجميع!');
-        
-        // Update Firebase if available
-        if (this.firebaseInitialized && this.roomCode) {
-            this.updateFirebaseRoom();
+        try {
+            // Hide room info and start the actual game
+            document.getElementById('roomInfo').style.display = 'none';
+            document.getElementById('leaveGame').style.display = 'inline-block';
+            
+            // Reset game state properly
+            this.gameState = 'wordSelection';
+            this.currentPlayerIndex = 0;
+            this.currentWord = '';
+            this.guessedWords = [];
+            this.timeLeft = 60;
+            
+            // Clear canvas
+            this.clearCanvas();
+            
+            // Start the game
+            this.showWordSelection();
+            this.hideCanvasOverlay();
+            
+            this.showNotification('success', 'بدأت اللعبة!', 'الآن يمكن للاعبين البدء في الرسم والتخمين');
+            this.addMessage('system', 'بدأت اللعبة! حظاً سعيداً للجميع!');
+            
+            // Update Firebase if available
+            if (this.firebaseInitialized && this.roomCode) {
+                this.updateFirebaseRoom();
+            }
+            
+            console.log('Room game started successfully');
+        } catch (error) {
+            console.error('Error starting room game:', error);
+            this.showNotification('error', 'خطأ!', 'فشل في بدء اللعبة');
         }
     }
     
@@ -850,6 +869,8 @@ class SaudiDrawingGame {
         
         // Update URL with room code
         this.updateURL();
+        
+        console.log('Local room created with players:', this.players.length);
     }
     
     showJoinRoomModal() {
@@ -929,6 +950,12 @@ class SaudiDrawingGame {
         // Hide main control buttons when in room
         document.querySelector('.control-group').style.display = 'none';
         document.getElementById('leaveGame').style.display = 'none';
+        
+        // Make sure start room game button is visible
+        document.getElementById('startRoomGame').style.display = 'inline-block';
+        document.getElementById('leaveRoom').style.display = 'inline-block';
+        
+        console.log('Room info shown, players:', this.players.length);
     }
     
     saveRoomData() {
