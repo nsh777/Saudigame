@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>رسم و تخمين - Saudi Drawing Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <h1>🎨 رسم و تخمين</h1>
+                <p>Saudi Drawing Game</p>
+            </div>
+            <div class="player-info">
+                <div class="player-count">
+                    <span id="playerCount">0</span> لاعبين
+                </div>
+                <div class="timer">
+                    <span id="timer">60</span> ثانية
+                </div>
+            </div>
+        </header>
+
+        <!-- Game Area -->
+        <main class="game-area">
+            <!-- Drawing Canvas -->
+            <div class="drawing-section">
+                <div class="canvas-container">
+                    <canvas id="drawingCanvas" width="800" height="600"></canvas>
+                    <div class="canvas-overlay" id="canvasOverlay">
+                        <div class="waiting-message">
+                            <h2>انتظر دورك...</h2>
+                            <p>ستبدأ اللعبة قريباً</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Drawing Tools -->
+                <div class="drawing-tools">
+                    <div class="tool-group">
+                        <button class="tool-btn active" data-tool="brush" title="فرشاة">
+                            🖌️
+                        </button>
+                        <button class="tool-btn" data-tool="eraser" title="ممحاة">
+                            🧽
+                        </button>
+                    </div>
+                    
+                    <div class="color-palette">
+                        <button class="color-btn active" data-color="#000000" style="background-color: #000000;"></button>
+                        <button class="color-btn" data-color="#FF0000" style="background-color: #FF0000;"></button>
+                        <button class="color-btn" data-color="#00FF00" style="background-color: #00FF00;"></button>
+                        <button class="color-btn" data-color="#0000FF" style="background-color: #0000FF;"></button>
+                        <button class="color-btn" data-color="#FFFF00" style="background-color: #FFFF00;"></button>
+                        <button class="color-btn" data-color="#FF00FF" style="background-color: #FF00FF;"></button>
+                        <button class="color-btn" data-color="#00FFFF" style="background-color: #00FFFF;"></button>
+                        <button class="color-btn" data-color="#FFA500" style="background-color: #FFA500;"></button>
+                    </div>
+                    
+                    <div class="brush-size">
+                        <label>حجم الفرشاة:</label>
+                        <input type="range" id="brushSize" min="1" max="20" value="5">
+                        <span id="brushSizeValue">5</span>
+                    </div>
+                    
+                    <button class="clear-btn" id="clearCanvas">مسح الرسمة</button>
+                </div>
+            </div>
+
+            <!-- Game Info and Chat -->
+            <div class="game-info">
+                <!-- Word Display -->
+                <div class="word-display">
+                    <h3>الكلمة المرسومة:</h3>
+                    <div class="word-container">
+                        <span id="currentWord">_ _ _ _ _</span>
+                    </div>
+                    <div class="word-hint">
+                        <span id="wordHint">تلميح: كلمة سعودية</span>
+                    </div>
+                </div>
+
+                <!-- Scoreboard -->
+                <div class="scoreboard">
+                    <h3>النتائج</h3>
+                    <div class="players-list" id="playersList">
+                        <!-- Players will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Chat -->
+                <div class="chat-section">
+                    <h3>المحادثة</h3>
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="message system">
+                            <span>مرحباً بك في لعبة رسم وتخمين السعودية! 🎨</span>
+                        </div>
+                    </div>
+                    <div class="chat-input">
+                        <input type="text" id="chatInput" placeholder="اكتب تخمينك هنا..." maxlength="50">
+                        <button id="sendMessage">إرسال</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Game Controls -->
+        <div class="game-controls">
+            <div class="control-group">
+                <button class="btn btn-primary" id="createRoom">
+                    <span class="btn-icon">🏠</span>
+                    إنشاء غرفة
+                </button>
+                <button class="btn btn-secondary" id="joinRoom">
+                    <span class="btn-icon">🔗</span>
+                    انضمام للغرفة
+                </button>
+            </div>
+            <div class="room-info" id="roomInfo" style="display: none;">
+                <div class="room-code">
+                    <span class="label">كود الغرفة:</span>
+                    <span class="code" id="roomCode">ABC123</span>
+                    <button class="copy-btn" id="copyRoomCode">📋</button>
+                </div>
+                <div class="share-links">
+                    <button class="share-btn" id="shareWhatsApp">واتساب</button>
+                    <button class="share-btn" id="shareTelegram">تيليجرام</button>
+                    <button class="share-btn" id="shareLink">رابط</button>
+                </div>
+            </div>
+            <button class="btn btn-danger" id="leaveGame" style="display: none;">
+                <span class="btn-icon">🚪</span>
+                مغادرة اللعبة
+            </button>
+        </div>
+
+        <!-- Word Selection Modal -->
+        <div class="modal" id="wordModal">
+            <div class="modal-content">
+                <h3>اختر كلمة للرسم</h3>
+                <div class="word-options" id="wordOptions">
+                    <!-- Word options will be added here -->
+                </div>
+                <button class="btn btn-primary" id="selectWord">اختيار الكلمة</button>
+            </div>
+        </div>
+
+        <!-- Join Room Modal -->
+        <div class="modal" id="joinRoomModal">
+            <div class="modal-content">
+                <h3>انضمام للغرفة</h3>
+                <div class="input-group">
+                    <label for="roomCodeInput">أدخل كود الغرفة:</label>
+                    <input type="text" id="roomCodeInput" placeholder="مثال: ABC123" maxlength="6">
+                </div>
+                <div class="input-group">
+                    <label for="playerNameInput">اسمك:</label>
+                    <input type="text" id="playerNameInput" placeholder="أدخل اسمك" maxlength="20">
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" id="confirmJoin">انضمام</button>
+                    <button class="btn btn-secondary" id="cancelJoin">إلغاء</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div class="modal" id="gameOverModal">
+            <div class="modal-content">
+                <h3>انتهت الجولة!</h3>
+                <div class="final-scores" id="finalScores">
+                    <!-- Final scores will be added here -->
+                </div>
+                <button class="btn btn-primary" id="playAgain">لعب مرة أخرى</button>
+            </div>
+        </div>
+
+        <!-- Notification Container -->
+        <div class="notifications" id="notifications"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
