@@ -211,6 +211,15 @@ class SaudiDrawingGame {
             this.testFirebaseConnection();
         });
         
+        // Room controls
+        document.getElementById('startRoomGame').addEventListener('click', () => {
+            this.startRoomGame();
+        });
+        
+        document.getElementById('leaveRoom').addEventListener('click', () => {
+            this.leaveRoom();
+        });
+        
         // Chat
         document.getElementById('sendMessage').addEventListener('click', () => {
             this.sendMessage();
@@ -482,10 +491,34 @@ class SaudiDrawingGame {
         }
     }
     
-    leaveGame() {
-        this.gameState = 'waiting';
-        this.showCanvasOverlay();
-        this.stopTimer();
+    startRoomGame() {
+        console.log('Starting room game...');
+        
+        if (this.players.length < 2) {
+            this.showNotification('warning', 'تحذير!', 'يجب أن يكون هناك لاعبين على الأقل لبدء اللعبة');
+            return;
+        }
+        
+        // Hide room info and start the actual game
+        document.getElementById('roomInfo').style.display = 'none';
+        document.getElementById('leaveGame').style.display = 'inline-block';
+        
+        // Start the game
+        this.gameState = 'wordSelection';
+        this.showWordSelection();
+        this.hideCanvasOverlay();
+        
+        this.showNotification('success', 'بدأت اللعبة!', 'الآن يمكن للاعبين البدء في الرسم والتخمين');
+        this.addMessage('system', 'بدأت اللعبة! حظاً سعيداً للجميع!');
+        
+        // Update Firebase if available
+        if (this.firebaseInitialized && this.roomCode) {
+            this.updateFirebaseRoom();
+        }
+    }
+    
+    leaveRoom() {
+        console.log('Leaving room...');
         
         // Remove player from Firebase room
         if (this.firebaseInitialized && this.roomCode) {
@@ -497,7 +530,6 @@ class SaudiDrawingGame {
         }
         
         // Clear room data
-        localStorage.removeItem(this.roomStorageKey);
         this.roomCode = '';
         this.isHost = false;
         this.roomId = null;
@@ -506,15 +538,18 @@ class SaudiDrawingGame {
         
         // Reset UI
         document.getElementById('roomInfo').style.display = 'none';
-        document.querySelector('.control-group').style.display = 'flex';
         document.getElementById('leaveGame').style.display = 'none';
+        document.getElementById('startGame').style.display = 'inline-block';
+        document.getElementById('createRoom').style.display = 'inline-block';
+        document.getElementById('joinRoom').style.display = 'inline-block';
         
         // Clear URL parameters
         const baseUrl = window.location.origin + window.location.pathname;
         window.history.pushState({}, '', baseUrl);
         
         this.addPlayer('أنت', true);
-        this.addMessage('system', 'غادرت اللعبة');
+        this.addMessage('system', 'غادرت الغرفة');
+        this.showNotification('info', 'غادرت الغرفة', 'يمكنك الآن إنشاء غرفة جديدة أو الانضمام لغيرها');
     }
     
     showWordSelection() {
@@ -890,8 +925,10 @@ class SaudiDrawingGame {
         const shareableURL = this.generateShareableURL();
         document.getElementById('roomUrl').value = shareableURL;
         document.getElementById('roomInfo').style.display = 'block';
+        
+        // Hide main control buttons when in room
         document.querySelector('.control-group').style.display = 'none';
-        document.getElementById('leaveGame').style.display = 'inline-block';
+        document.getElementById('leaveGame').style.display = 'none';
     }
     
     saveRoomData() {
