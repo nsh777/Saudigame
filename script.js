@@ -20,6 +20,8 @@ class SaudiDrawingGame {
         this.roomId = null;
         this.websocket = null;
         this.notifications = [];
+        this.roomStorageKey = 'saudi_drawing_rooms';
+        this.playerStorageKey = 'saudi_drawing_player';
         
         // Saudi-themed word categories
         this.wordCategories = {
@@ -58,8 +60,40 @@ class SaudiDrawingGame {
         this.setupCanvas();
         this.setupEventListeners();
         this.setupDrawing();
-        this.addPlayer('أنت', true);
+        this.checkForRoomCode();
         this.updateUI();
+    }
+    
+    checkForRoomCode() {
+        // Check URL parameters for room code
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomCode = urlParams.get('room');
+        const playerName = urlParams.get('name');
+        
+        if (roomCode) {
+            // Try to join existing room
+            this.joinRoomByCode(roomCode, playerName || 'لاعب جديد');
+        } else {
+            // Check localStorage for existing room
+            const savedRoom = localStorage.getItem(this.roomStorageKey);
+            if (savedRoom) {
+                const roomData = JSON.parse(savedRoom);
+                this.roomCode = roomData.roomCode;
+                this.isHost = roomData.isHost;
+                this.roomId = roomData.roomId;
+                this.players = roomData.players || [];
+                this.score = roomData.score || {};
+                
+                if (this.isHost) {
+                    this.showRoomInfo();
+                    this.addPlayer('أنت (المضيف)', true);
+                } else {
+                    this.addPlayer('أنت', true);
+                }
+            } else {
+                this.addPlayer('أنت', true);
+            }
+        }
     }
     
     setupCanvas() {
@@ -125,6 +159,10 @@ class SaudiDrawingGame {
         // Room sharing
         document.getElementById('copyRoomCode').addEventListener('click', () => {
             this.copyRoomCode();
+        });
+        
+        document.getElementById('copyRoomUrl').addEventListener('click', () => {
+            this.copyRoomUrl();
         });
         
         document.getElementById('shareWhatsApp').addEventListener('click', () => {
@@ -255,6 +293,11 @@ class SaudiDrawingGame {
         }
         
         this.updatePlayersList();
+        
+        // Save room data when players are added
+        if (this.roomCode) {
+            this.saveRoomData();
+        }
     }
     
     updatePlayersList() {
@@ -299,6 +342,25 @@ class SaudiDrawingGame {
         this.gameState = 'waiting';
         this.showCanvasOverlay();
         this.stopTimer();
+        
+        // Clear room data
+        localStorage.removeItem(this.roomStorageKey);
+        this.roomCode = '';
+        this.isHost = false;
+        this.roomId = null;
+        this.players = [];
+        this.score = {};
+        
+        // Reset UI
+        document.getElementById('roomInfo').style.display = 'none';
+        document.querySelector('.control-group').style.display = 'flex';
+        document.getElementById('leaveGame').style.display = 'none';
+        
+        // Clear URL parameters
+        const baseUrl = window.location.origin + window.location.pathname;
+        window.history.pushState({}, '', baseUrl);
+        
+        this.addPlayer('أنت', true);
         this.addMessage('system', 'غادرت اللعبة');
     }
     
@@ -491,15 +553,23 @@ class SaudiDrawingGame {
         this.isHost = true;
         this.roomId = Date.now().toString();
         
-        // Add host as first player
+        // Clear existing players and add host
+        this.players = [];
+        this.score = {};
         this.addPlayer('أنت (المضيف)', true);
+        
+        // Save room data to localStorage
+        this.saveRoomData();
         
         // Show room info
         this.showRoomInfo();
         this.hideModal('joinRoomModal');
         
-        this.showNotification('success', 'تم إنشاء الغرفة!', 'شارك كود الغرفة مع أصدقائك');
+        this.showNotification('success', 'تم إنشاء الغرفة!', 'شارك الرابط مع أصدقائك');
         this.addMessage('system', `تم إنشاء غرفة جديدة: ${this.roomCode}`);
+        
+        // Update URL with room code
+        this.updateURL();
         
         // Simulate WebSocket connection
         this.simulateWebSocket();
@@ -518,14 +588,45 @@ class SaudiDrawingGame {
             return;
         }
         
-        if (roomCode === this.roomCode) {
-            this.addPlayer(playerName, false);
-            this.hideModal('joinRoomModal');
-            this.showNotification('success', 'تم الانضمام!', `مرحباً ${playerName} في الغرفة`);
-            this.addMessage('system', `${playerName} انضم للغرفة!`);
-        } else {
-            this.showNotification('error', 'خطأ!', 'كود الغرفة غير صحيح');
+        this.joinRoomByCode(roomCode, playerName);
+    }
+    
+    joinRoomByCode(roomCode, playerName) {
+        // Check if room exists in localStorage
+        const savedRoom = localStorage.getItem(this.roomStorageKey);
+        
+        if (savedRoom) {
+            const roomData = JSON.parse(savedRoom);
+            if (roomData.roomCode === roomCode) {
+                // Join existing room
+                this.roomCode = roomData.roomCode;
+                this.roomId = roomData.roomId;
+                this.isHost = false;
+                this.players = roomData.players || [];
+                this.score = roomData.score || {};
+                
+                // Add new player
+                this.addPlayer(playerName, false);
+                
+                // Save updated room data
+                this.saveRoomData();
+                
+                // Update URL
+                this.updateURL();
+                
+                this.hideModal('joinRoomModal');
+                this.showNotification('success', 'تم الانضمام!', `مرحباً ${playerName} في الغرفة`);
+                this.addMessage('system', `${playerName} انضم للغرفة!`);
+                
+                // Show room info for guests too
+                this.showRoomInfo();
+                
+                return;
+            }
         }
+        
+        // Room not found
+        this.showNotification('error', 'خطأ!', 'كود الغرفة غير صحيح أو انتهت صلاحيته');
     }
     
     generateRoomCode() {
@@ -539,9 +640,37 @@ class SaudiDrawingGame {
     
     showRoomInfo() {
         document.getElementById('roomCode').textContent = this.roomCode;
+        const shareableURL = this.generateShareableURL();
+        document.getElementById('roomUrl').value = shareableURL;
         document.getElementById('roomInfo').style.display = 'block';
         document.querySelector('.control-group').style.display = 'none';
         document.getElementById('leaveGame').style.display = 'inline-block';
+    }
+    
+    saveRoomData() {
+        const roomData = {
+            roomCode: this.roomCode,
+            roomId: this.roomId,
+            isHost: this.isHost,
+            players: this.players,
+            score: this.score,
+            gameState: this.gameState,
+            currentWord: this.currentWord,
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem(this.roomStorageKey, JSON.stringify(roomData));
+    }
+    
+    updateURL() {
+        const baseUrl = window.location.origin + window.location.pathname;
+        const newUrl = `${baseUrl}?room=${this.roomCode}`;
+        window.history.pushState({}, '', newUrl);
+    }
+    
+    generateShareableURL() {
+        const baseUrl = window.location.origin + window.location.pathname;
+        return `${baseUrl}?room=${this.roomCode}`;
     }
     
     copyRoomCode() {
@@ -559,9 +688,25 @@ class SaudiDrawingGame {
         });
     }
     
+    copyRoomUrl() {
+        const shareableURL = this.generateShareableURL();
+        navigator.clipboard.writeText(shareableURL).then(() => {
+            this.showNotification('success', 'تم النسخ!', 'رابط الغرفة تم نسخه للحافظة');
+        }).catch(() => {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = shareableURL;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            this.showNotification('success', 'تم النسخ!', 'رابط الغرفة تم نسخه للحافظة');
+        });
+    }
+    
     shareRoom(platform) {
-        const gameUrl = window.location.href;
-        const shareText = `انضم للعبة رسم وتخمين السعودية! 🎨\nكود الغرفة: ${this.roomCode}\nالرابط: ${gameUrl}`;
+        const shareableURL = this.generateShareableURL();
+        const shareText = `انضم للعبة رسم وتخمين السعودية! 🎨\nكود الغرفة: ${this.roomCode}\nالرابط: ${shareableURL}`;
         
         let shareUrl = '';
         
@@ -570,7 +715,7 @@ class SaudiDrawingGame {
                 shareUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
                 break;
             case 'telegram':
-                shareUrl = `https://t.me/share/url?url=${encodeURIComponent(gameUrl)}&text=${encodeURIComponent(shareText)}`;
+                shareUrl = `https://t.me/share/url?url=${encodeURIComponent(shareableURL)}&text=${encodeURIComponent(shareText)}`;
                 break;
             case 'link':
                 this.copyRoomCode();
@@ -583,8 +728,12 @@ class SaudiDrawingGame {
     }
     
     simulateWebSocket() {
-        // Simulate real-time updates
+        // Simulate real-time updates and room synchronization
         setInterval(() => {
+            if (this.roomCode) {
+                this.syncRoomData();
+            }
+            
             if (this.gameState === 'playing' && this.isHost) {
                 // Simulate other players joining
                 if (Math.random() < 0.1 && this.players.length < 6) {
@@ -596,7 +745,23 @@ class SaudiDrawingGame {
                     }
                 }
             }
-        }, 5000);
+        }, 2000);
+    }
+    
+    syncRoomData() {
+        // Check for room updates from other players
+        const savedRoom = localStorage.getItem(this.roomStorageKey);
+        if (savedRoom) {
+            const roomData = JSON.parse(savedRoom);
+            if (roomData.roomCode === this.roomCode && roomData.roomId === this.roomId) {
+                // Update players list if it has changed
+                if (JSON.stringify(roomData.players) !== JSON.stringify(this.players)) {
+                    this.players = roomData.players;
+                    this.score = roomData.score;
+                    this.updatePlayersList();
+                }
+            }
+        }
     }
     
     // Notification System

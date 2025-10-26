@@ -437,6 +437,54 @@ body {
     border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
+.room-url {
+    margin-bottom: 15px;
+}
+
+.room-url .label {
+    display: block;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 8px;
+}
+
+.url-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 5px;
+}
+
+.url-container input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    font-family: 'Courier New', monospace;
+}
+
+.url-container input:focus {
+    outline: none;
+}
+
+.room-instructions {
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.room-instructions p {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
 .copy-btn {
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.3);
